@@ -100,47 +100,49 @@ public class RouteBuilder {
             return;
         }
         for (Method method : methods) {
-            Route mapping = method.getAnnotation(Route.class);
-            GetRoute getMapping = method.getAnnotation(GetRoute.class);
-            PostRoute postMapping = method.getAnnotation(PostRoute.class);
-            DeleteRoute deleteMapping = method.getAnnotation(DeleteRoute.class);
-            PutRoute putMapping = method.getAnnotation(PutRoute.class);
+            buildRoute(method, nameSpace, suffix, router);
+        }
+    }
 
-            HttpMethod methodType = HttpMethod.ALL;
-            String[] paths = null;
-            //route method
-            if (null != mapping) {
-                // build multiple route
-                methodType = mapping.method();
-                paths = mapping.values();
-                if (mapping.value().length > 1 || !mapping.value()[0].equals("/")) {
-                    paths = mapping.value();
-                }
-            }
-            if (null != getMapping) {
-                methodType = HttpMethod.GET;
-                paths = getMapping.values();
-            }
-            if (null != postMapping) {
-                methodType = HttpMethod.POST;
-                paths = postMapping.values();
-            }
-            if (null != deleteMapping) {
-                methodType = HttpMethod.DELETE;
-                paths = deleteMapping.values();
-            }
-            if (null != putMapping) {
-                methodType = HttpMethod.PUT;
-                paths = putMapping.values();
-            }
+    private void buildRoute(Method method, String nameSpace, String suffix, Class<?> router) {
+        Route mapping = method.getAnnotation(Route.class);
+        GetRoute getMapping = method.getAnnotation(GetRoute.class);
+        PostRoute postMapping = method.getAnnotation(PostRoute.class);
+        DeleteRoute deleteMapping = method.getAnnotation(DeleteRoute.class);
+        PutRoute putMapping = method.getAnnotation(PutRoute.class);
 
-            if (null != paths && paths.length > 0) {
-                for (String path : paths) {
-                    String pathV = getRoutePath(path, nameSpace, suffix);
-                    this.buildRoute(router, method, pathV, methodType);
-                }
+        HttpMethod methodType = HttpMethod.ALL;
+        String[] paths = null;
+        //route method
+        if (null != mapping) {
+            // build multiple route
+            methodType = mapping.method();
+            paths = mapping.values();
+            if (mapping.value().length > 1 || !mapping.value()[0].equals("/")) {
+                paths = mapping.value();
             }
-
+        }
+        if (null != getMapping) {
+            methodType = HttpMethod.GET;
+            paths = getMapping.values();
+        }
+        if (null != postMapping) {
+            methodType = HttpMethod.POST;
+            paths = postMapping.values();
+        }
+        if (null != deleteMapping) {
+            methodType = HttpMethod.DELETE;
+            paths = deleteMapping.values();
+        }
+        if (null != putMapping) {
+            methodType = HttpMethod.PUT;
+            paths = putMapping.values();
+        }
+        if (null != paths && paths.length > 0) {
+            for (String path : paths) {
+                String pathV = getRoutePath(path, nameSpace, suffix);
+                this.buildRoute(router, method, pathV, methodType);
+            }
         }
     }
 
