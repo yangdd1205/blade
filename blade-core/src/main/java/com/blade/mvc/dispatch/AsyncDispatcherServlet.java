@@ -31,7 +31,7 @@ import java.io.IOException;
  * @author <a href="mailto:biezhi.me@gmail.com" target="_blank">biezhi</a>
  * @since 1.7.1-alpha
  */
-public class AsyncDispatcherServlet extends AbsDispatcherServlet {
+public class AsyncDispatcherServlet extends SimpleDispatcherServlet {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AsyncDispatcherServlet.class);
 

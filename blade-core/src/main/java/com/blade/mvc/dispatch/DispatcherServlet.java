@@ -28,7 +28,7 @@ import java.io.IOException;
  * @author <a href="mailto:biezhi.me@gmail.com" target="_blank">biezhi</a>
  * @since 1.7.1-alpha
  */
-public class DispatcherServlet extends AbsDispatcherServlet {
+public class DispatcherServlet extends SimpleDispatcherServlet {
 
     @Override
     protected void service(HttpServletRequest httpRequest, HttpServletResponse httpResponse) throws ServletException, IOException {

@@ -228,9 +228,9 @@ public class ServletRequest implements Request {
     public Map<String, String> querys() {
         Map<String, String> params = CollectionKit.newConcurrentHashMap(8);
         Map<String, String[]> requestParams = request.getParameterMap();
-        for (Map.Entry<String, String[]> entry : requestParams.entrySet()) {
-            params.put(entry.getKey(), join(entry.getValue()));
-        }
+
+        requestParams.forEach((key, value) -> params.put(key, join(value)));
+
         params.putAll(queryParams);
         return Collections.unmodifiableMap(params);
     }

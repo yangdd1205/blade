@@ -2898,4 +2898,63 @@ public abstract class StringKit {
             sb.append(c);
         return sb.toString();
     }
+
+    /**
+     * 通过简单indexOf查找位置，indexOf方法本身基于char数组变量来定位
+     *
+     * @param source        源字符串
+     * @param searchString  匹配字符串
+     * @param replaceString 目标字符串
+     * @return 返回结果
+     */
+    public static String replaceAll(String source, String searchString, String replaceString) {
+
+        if (source == null) {
+            return null;
+        }
+
+        if (isEmpty(searchString)) {
+            return source;
+        }
+
+        if (replaceString == null) {
+            replaceString = "";
+        }
+        int len = source.length();
+        int sl = searchString.length();
+        int rl = replaceString.length();
+        int length;
+        if (sl == rl) {
+            length = len;
+        } else {
+            int c = 0;
+            int s = 0;
+            int e;
+            while ((e = source.indexOf(searchString, s)) != -1) {
+                c++;
+                s = e + sl;
+            }
+            if (c == 0) {
+                return source;
+            }
+            length = len - (c * (sl - rl));
+        }
+
+        int s = 0;
+        int e = source.indexOf(searchString, s);
+        if (e == -1) {
+            return source;
+        }
+        StringBuffer sb = new StringBuffer(length);
+        while (e != -1) {
+            sb.append(source.substring(s, e));
+            sb.append(replaceString);
+            s = e + sl;
+            e = source.indexOf(searchString, s);
+        }
+        e = len;
+        sb.append(source.substring(s, e));
+        return sb.toString();
+    }
+
 }

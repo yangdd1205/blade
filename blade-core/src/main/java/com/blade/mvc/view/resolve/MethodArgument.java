@@ -15,9 +15,12 @@
  */
 package com.blade.mvc.view.resolve;
 
+import com.blade.exception.BladeException;
 import com.blade.exception.RouteException;
 import com.blade.kit.AsmKit;
 import com.blade.kit.StringKit;
+import com.blade.kit.reflect.ConvertKit;
+import com.blade.kit.reflect.ReflectKit;
 import com.blade.mvc.annotation.*;
 import com.blade.mvc.http.Request;
 import com.blade.mvc.http.Response;
@@ -25,155 +28,165 @@ import com.blade.mvc.http.wrapper.Session;
 import com.blade.mvc.multipart.FileItem;
 import com.blade.mvc.view.ModelAndView;
 
-import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.Map;
 
 public final class MethodArgument {
 
     public static Object[] getArgs(Request request, Response response, Method actionMethod) throws Exception {
 
-        Class<?>[] parameters = actionMethod.getParameterTypes();
-        Annotation[][] annotations = actionMethod.getParameterAnnotations();
-
-        Object[] args = new Object[parameters.length];
-
         actionMethod.setAccessible(true);
 
+        Parameter[] parameters = actionMethod.getParameters();
+        Object[] args = new Object[parameters.length];
         String[] paramaterNames = AsmKit.getMethodParamNames(actionMethod);
 
         for (int i = 0, len = parameters.length; i < len; i++) {
+            Parameter parameter = parameters[i];
+            String paramName = paramaterNames[i];
+            int annoLen = parameter.getAnnotations().length;
+            Class<?> argType = parameter.getType();
 
-            Class<?> argType = parameters[i];
-            if (argType == Request.class) {
-                args[i] = request;
-                continue;
-            }
+            if (annoLen > 0) {
+                QueryParam queryParam = parameter.getAnnotation(QueryParam.class);
+                if (null != queryParam) {
 
-            if (argType == Response.class) {
-                args[i] = response;
-                continue;
-            }
+                    String name = StringKit.isBlank(queryParam.name()) ? paramName : queryParam.name();
 
-            if (argType == Session.class) {
-                args[i] = request.session();
-                continue;
-            }
-
-            if (argType == ModelAndView.class) {
-                args[i] = new ModelAndView();
-                continue;
-            }
-
-            if (argType == Map.class) {
-                args[i] = request.querys();
-                continue;
-            }
-
-            Annotation annotation = annotations[i][0];
-            if (null != annotation) {
-                // query param
-                if (annotation.annotationType() == QueryParam.class) {
-                    QueryParam queryParam = (QueryParam) annotation;
-                    String paramName = queryParam.value();
-                    String val = request.query(paramName);
-                    boolean required = queryParam.required();
-
-                    if (StringKit.isBlank(paramName)) {
-                        assert paramaterNames != null;
-                        paramName = paramaterNames[i];
-                        val = request.query(paramName);
+                    if (ReflectKit.isBasicType(argType)) {
+                        String val = request.query(name);
+                        boolean required = queryParam.required();
+                        if (StringKit.isBlank(val)) {
+                            val = queryParam.defaultValue();
+                        }
+                        if (required && StringKit.isBlank(val)) {
+                            throw new RouteException("query param [" + paramName + "] not is empty.");
+                        }
+                        args[i] = getRequestParam(argType, val);
+                    } else {
+                        try {
+                            Field[] fields = argType.getDeclaredFields();
+                            if (null == fields || fields.length == 0) {
+                                continue;
+                            }
+                            args[i] = null;
+                            boolean hasValue = false;
+                            Object obj = ReflectKit.newInstance(argType);
+                            for (Field field : fields) {
+                                field.setAccessible(true);
+                                if (field.getName().equals("serialVersionUID")) {
+                                    continue;
+                                }
+                                // article[title] => hello
+                                String fieldName = name + "[" + field.getName() + "]";
+                                String fieldValue = request.query(fieldName);
+                                if (null != fieldValue) {
+                                    Object value = ConvertKit.convert(field.getType(), fieldValue);
+                                    field.set(obj, value);
+                                    hasValue = true;
+                                }
+                            }
+                            if (hasValue) {
+                                args[i] = obj;
+                            }
+                        } catch (NumberFormatException | IllegalAccessException | SecurityException e) {
+                            throw new BladeException(e);
+                        }
                     }
-                    if (StringKit.isBlank(val)) {
-                        val = queryParam.defaultValue();
-                    }
-
-                    if (required && StringKit.isBlank(val)) {
-                        throw new RouteException("query param [" + paramName + "] not is empty.");
-                    }
-
-                    args[i] = getRequestParam(argType, val);
-                    continue;
                 }
 
-                // path param
-                if (annotation.annotationType() == PathParam.class) {
-                    PathParam pathParam = (PathParam) annotation;
-                    String paramName = pathParam.value();
-                    String val = request.pathParam(paramName);
-
-                    if (StringKit.isBlank(paramName)) {
-                        assert paramaterNames != null;
-                        paramName = paramaterNames[i];
-                        val = request.pathParam(paramName);
-                    }
+                PathParam pathParam = parameter.getAnnotation(PathParam.class);
+                if (null != pathParam) {
+                    String name = StringKit.isBlank(pathParam.name()) ? paramName : pathParam.name();
+                    String val = request.pathParam(name);
                     if (StringKit.isBlank(val)) {
                         val = pathParam.defaultValue();
                     }
                     args[i] = getRequestParam(argType, val);
                 }
 
-                // header param
-                if (annotation.annotationType() == HeaderParam.class) {
-                    HeaderParam headerParam = (HeaderParam) annotation;
-                    String paramName = headerParam.value();
-                    String val = request.header(paramName);
+                HeaderParam headerParam = parameter.getAnnotation(HeaderParam.class);
+                if (null != headerParam) {
+                    String key = StringKit.isBlank(headerParam.value()) ? paramName : headerParam.value();
+                    String val = request.header(key);
                     boolean required = headerParam.required();
-
-                    if (StringKit.isBlank(paramName)) {
-                        assert paramaterNames != null;
-                        paramName = paramaterNames[i];
-                        val = request.header(paramName);
-                    }
                     if (StringKit.isBlank(val)) {
                         val = headerParam.defaultValue();
                     }
-
                     if (required && StringKit.isBlank(val)) {
                         throw new RouteException("header param [" + paramName + "] not is empty.");
                     }
-
                     args[i] = getRequestParam(argType, val);
-                    continue;
                 }
 
                 // cookie param
-                if (annotation.annotationType() == CookieParam.class) {
-                    CookieParam cookieParam = (CookieParam) annotation;
-                    String paramName = cookieParam.value();
-                    String val = request.cookie(paramName);
+                CookieParam cookieParam = parameter.getAnnotation(CookieParam.class);
+                if (null != cookieParam) {
+                    String cookieName = StringKit.isBlank(cookieParam.value()) ? paramName : cookieParam.value();
+                    String val = request.cookie(cookieName);
                     boolean required = cookieParam.required();
-
-                    if (StringKit.isBlank(paramName)) {
-                        assert paramaterNames != null;
-                        paramName = paramaterNames[i];
-                        val = request.cookie(paramName);
-                    }
                     if (StringKit.isBlank(val)) {
                         val = cookieParam.defaultValue();
                     }
-
                     if (required && StringKit.isBlank(val)) {
                         throw new RouteException("cookie param [" + paramName + "] not is empty.");
                     }
                     args[i] = getRequestParam(argType, val);
-                    continue;
                 }
 
                 // form multipart
-                if (annotation.annotationType() == MultipartParam.class && argType == FileItem.class) {
-
-                    MultipartParam multipartParam = (MultipartParam) annotation;
-                    String paramName = multipartParam.value();
-                    FileItem val = request.fileItem(paramName);
-
-                    if (StringKit.isBlank(paramName)) {
-                        assert paramaterNames != null;
-                        paramName = paramaterNames[i];
-                        val = request.fileItem(paramName);
+                MultipartParam multipartParam = parameter.getAnnotation(MultipartParam.class);
+                if (null != multipartParam && argType == FileItem.class) {
+                    String name = StringKit.isBlank(multipartParam.value()) ? paramName : multipartParam.value();
+                    args[i] = request.fileItem(name);
+                }
+            } else {
+                if (ReflectKit.isBasicType(argType)) {
+                    args[i] = request.query(paramName);
+                } else {
+                    if (argType == Request.class) {
+                        args[i] = request;
+                        continue;
+                    } else if (argType == Response.class) {
+                        args[i] = response;
+                    } else if (argType == Session.class) {
+                        args[i] = request.session();
+                    } else if (argType == ModelAndView.class) {
+                        args[i] = new ModelAndView();
+                    } else if (argType == Map.class) {
+                        args[i] = request.querys();
+                    } else {
+                        try {
+                            Field[] fields = argType.getDeclaredFields();
+                            if (null == fields || fields.length == 0) {
+                                continue;
+                            }
+                            args[i] = null;
+                            boolean hasValue = false;
+                            Object obj = ReflectKit.newInstance(argType);
+                            for (Field field : fields) {
+                                field.setAccessible(true);
+                                if (field.getName().equals("serialVersionUID")) {
+                                    continue;
+                                }
+                                // article[title] => hello
+                                String fieldName = paramaterNames[i] + "[" + field.getName() + "]";
+                                String fieldValue = request.query(fieldName);
+                                if (null != fieldValue) {
+                                    Object value = ConvertKit.convert(field.getType(), fieldValue);
+                                    field.set(obj, value);
+                                    hasValue = true;
+                                }
+                            }
+                            if (hasValue) {
+                                args[i] = obj;
+                            }
+                        } catch (NumberFormatException | IllegalAccessException | SecurityException e) {
+                            throw new BladeException(e);
+                        }
                     }
-                    args[i] = val;
-                    continue;
                 }
             }
         }

@@ -15,10 +15,7 @@
  */
 package com.blade.kit.reflect;
 
-import com.blade.kit.Emptys;
-import com.blade.kit.ExceptionKit;
-import com.blade.kit.StringKit;
-import com.blade.kit.SystemKit;
+import com.blade.kit.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,9 +25,7 @@ import java.lang.reflect.*;
 import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.List;
+import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -205,64 +200,6 @@ public abstract class ReflectKit {
 		}
 		return ret;
 	}
-	
-	/*private static boolean sameType(Type[] types, Class<?>[] clazzes) {
-		if (types.length != clazzes.length) {
-			return false;
-		}
-		for (int i = 0; i < types.length; i++) {
-			if (!Type.getType(clazzes[i]).equals(types[i])) {
-				return false;
-			}
-		}
-		return true;
-	}
-	
-	public static String[] getMethodParamsNames(final Method m) {
-		try {
-			final String[] paramNames = new String[m.getParameterTypes().length];
-			Class<?> declaringClass = m.getDeclaringClass();
-			String className = declaringClass.getName();
-			int lastDotIndex = className.lastIndexOf(".");
-			InputStream is = declaringClass.getResourceAsStream(className.substring(lastDotIndex + 1) + ".class");
-			ClassReader cr = new ClassReader(is);
-			cr.accept(new ClassVisitor(Opcodes.ASM4) {
-				@Override
-				public MethodVisitor visitMethod(final int access, final String name, final String desc,
-						final String signature, final String[] exceptions) {
-
-					final Type[] args = Type.getArgumentTypes(desc);
-					// 方法名相同并且参数个数相同
-					if (!name.equals(m.getName()) || !sameType(args, m.getParameterTypes())) {
-						return super.visitMethod(access, name, desc, signature, exceptions);
-					}
-					MethodVisitor v = super.visitMethod(access, name, desc, signature, exceptions);
-					return new MethodVisitor(Opcodes.ASM4, v) {
-						@Override
-						public void visitLocalVariable(String name, String desc, String signature, Label start,
-								Label end, int index) {
-							int i = index - 1;
-							// 如果是静态方法，则第一就是参数
-							// 如果不是静态方法，则第一个是"this"，然后才是方法的参数
-							if (Modifier.isStatic(m.getModifiers())) {
-								i = index;
-							}
-							if (i >= 0 && i < paramNames.length) {
-								paramNames[i] = name;
-							}
-							super.visitLocalVariable(name, desc, signature, start, end, index);
-						}
-					};
-				}
-			}, 0);
-			return paramNames;
-		} catch (SecurityException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}*/
 	
 	/**
 	 * 
@@ -570,5 +507,19 @@ public abstract class ReflectKit {
 		}
 		return false;
 	}
+
+    private static final List<Class> primitiveTypes = Arrays.asList(int.class, Integer.class, long.class, Long.class,
+            boolean.class, Boolean.class, float.class, Float.class, double.class, Double.class, byte.class, Byte.class, short.class, Short.class,
+            String.class);
+
+    /**
+     * 是否是基本数据类型
+     *
+     * @param type
+     * @return
+     */
+    public static boolean isBasicType(Class<?> type) {
+        return primitiveTypes.contains(type);
+    }
 
 }

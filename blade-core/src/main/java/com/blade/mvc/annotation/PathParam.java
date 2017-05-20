@@ -28,7 +28,7 @@ import java.lang.annotation.*;
 @Documented
 public @interface PathParam {
 
-    String value() default "";
+    String name() default "";
 
     String defaultValue() default "";
 

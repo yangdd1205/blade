@@ -35,6 +35,7 @@ public final class Path {
     public static final String SLASH = "/";
 
     public static String getRelativePath(String path, String contextPath) {
+
         contextPath = null == contextPath ? "" : contextPath;
         path = path.substring(contextPath.length());
 
@@ -76,24 +77,26 @@ public final class Path {
     }
 
     public static String fixPath(String path) {
-        if (path == null) {
+        if (null == path) {
             return "/";
         }
-        if (!path.startsWith("/")) {
+        if (path.charAt(0) != '/') {
             path = "/" + path;
         }
         if (path.length() > 1 && path.endsWith("/")) {
             path = path.substring(0, path.length() - 1);
         }
-        path = path.replaceAll("\\s", "%20");
-        return path;
+        if (!path.contains("\\s")) {
+            return path;
+        }
+        return StringKit.replaceAll(path, "\\s", "%20");
     }
 
     public static String cleanPath(String path) {
         if (path == null) {
             return null;
         }
-        return path.replaceAll("[/]+", "/");
+        return StringKit.replaceAll(path, "[/]+", "/");
     }
 
 }

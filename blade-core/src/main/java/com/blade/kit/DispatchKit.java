@@ -167,7 +167,6 @@ public class DispatchKit {
 
     public static void print(String content, PrintWriter writer) throws IOException {
         writer.print(content);
-        writer.flush();
         writer.close();
     }
 

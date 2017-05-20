@@ -35,9 +35,9 @@ import java.util.concurrent.TimeUnit;
  * @author <a href="mailto:biezhi.me@gmail.com" target="_blank">biezhi</a>
  * @since 1.7.1-release
  */
-public abstract class AbsDispatcherServlet extends HttpServlet {
+public abstract class SimpleDispatcherServlet extends HttpServlet {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(AbsDispatcherServlet.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(SimpleDispatcherServlet.class);
 
     protected static ThreadPoolExecutor executor;
     protected Blade blade;

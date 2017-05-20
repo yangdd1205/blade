@@ -30,7 +30,7 @@ public @interface QueryParam {
 
     boolean required() default false;
 
-    String value() default "";
+    String name() default "";
 
     String defaultValue() default "";
 

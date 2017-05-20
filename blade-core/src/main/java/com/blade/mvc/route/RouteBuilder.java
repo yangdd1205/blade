@@ -15,6 +15,7 @@
  */
 package com.blade.mvc.route;
 
+import com.blade.kit.StringKit;
 import com.blade.kit.reflect.ReflectKit;
 import com.blade.mvc.annotation.Controller;
 import com.blade.mvc.annotation.Intercept;
