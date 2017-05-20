@@ -71,8 +71,6 @@ public final class MethodArgument {
                             if (null == fields || fields.length == 0) {
                                 continue;
                             }
-                            args[i] = null;
-                            boolean hasValue = false;
                             Object obj = ReflectKit.newInstance(argType);
                             for (Field field : fields) {
                                 field.setAccessible(true);
@@ -82,15 +80,12 @@ public final class MethodArgument {
                                 // article[title] => hello
                                 String fieldName = name + "[" + field.getName() + "]";
                                 String fieldValue = request.query(fieldName);
-                                if (null != fieldValue) {
+                                if (StringKit.isNotBlank(fieldValue)) {
                                     Object value = ConvertKit.convert(field.getType(), fieldValue);
                                     field.set(obj, value);
-                                    hasValue = true;
                                 }
                             }
-                            if (hasValue) {
-                                args[i] = obj;
-                            }
+                            args[i] = obj;
                         } catch (NumberFormatException | IllegalAccessException | SecurityException e) {
                             throw new BladeException(e);
                         }
@@ -163,26 +158,19 @@ public final class MethodArgument {
                             if (null == fields || fields.length == 0) {
                                 continue;
                             }
-                            args[i] = null;
-                            boolean hasValue = false;
                             Object obj = ReflectKit.newInstance(argType);
                             for (Field field : fields) {
                                 field.setAccessible(true);
                                 if (field.getName().equals("serialVersionUID")) {
                                     continue;
                                 }
-                                // article[title] => hello
-                                String fieldName = paramaterNames[i] + "[" + field.getName() + "]";
-                                String fieldValue = request.query(fieldName);
-                                if (null != fieldValue) {
+                                String fieldValue = request.query(field.getName());
+                                if (StringKit.isNotBlank(fieldValue)) {
                                     Object value = ConvertKit.convert(field.getType(), fieldValue);
                                     field.set(obj, value);
-                                    hasValue = true;
                                 }
                             }
-                            if (hasValue) {
-                                args[i] = obj;
-                            }
+                            args[i] = obj;
                         } catch (NumberFormatException | IllegalAccessException | SecurityException e) {
                             throw new BladeException(e);
                         }
