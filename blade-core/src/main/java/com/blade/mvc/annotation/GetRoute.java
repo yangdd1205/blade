@@ -39,23 +39,15 @@ import java.lang.annotation.*;
  * @author <a href="mailto:biezhi.me@gmail.com" target="_blank">biezhi</a>
  * @since 1.5
  */
-@Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
 @Documented
-public @interface Route {
+@Route(method = HttpMethod.GET)
+public @interface GetRoute {
 
     /**
      * @return Request url
      */
     String[] values() default {"/"};
-
-    @Deprecated
-    String[] value() default {"/"};
-
-    /**
-     * @return Request HttpMethod
-     */
-    HttpMethod method() default HttpMethod.ALL;
-
 
 }

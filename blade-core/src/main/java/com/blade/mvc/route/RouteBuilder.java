@@ -17,9 +17,7 @@ package com.blade.mvc.route;
 
 import com.blade.kit.StringKit;
 import com.blade.kit.reflect.ReflectKit;
-import com.blade.mvc.annotation.Controller;
-import com.blade.mvc.annotation.Intercept;
-import com.blade.mvc.annotation.RestController;
+import com.blade.mvc.annotation.*;
 import com.blade.mvc.annotation.Route;
 import com.blade.mvc.http.HttpMethod;
 import com.blade.mvc.http.Request;
@@ -103,36 +101,56 @@ public class RouteBuilder {
         }
         for (Method method : methods) {
             Route mapping = method.getAnnotation(Route.class);
+            GetRoute getMapping = method.getAnnotation(GetRoute.class);
+            PostRoute postMapping = method.getAnnotation(PostRoute.class);
+            DeleteRoute deleteMapping = method.getAnnotation(DeleteRoute.class);
+            PutRoute putMapping = method.getAnnotation(PutRoute.class);
+
+            HttpMethod methodType = HttpMethod.ALL;
+            String[] paths = null;
             //route method
             if (null != mapping) {
                 // build multiple route
-                HttpMethod methodType = mapping.method();
-                String[] paths = mapping.values();
+                methodType = mapping.method();
+                paths = mapping.values();
                 if (mapping.value().length > 1 || !mapping.value()[0].equals("/")) {
                     paths = mapping.value();
                 }
-                if (paths.length > 0) {
-                    for (String path : paths) {
-                        String pathV = getRoutePath(path, nameSpace, suffix);
-                        this.buildRoute(router, method, pathV, methodType);
-                    }
+            }
+            if (null != getMapping) {
+                methodType = HttpMethod.GET;
+                paths = getMapping.values();
+            }
+            if (null != postMapping) {
+                methodType = HttpMethod.POST;
+                paths = postMapping.values();
+            }
+            if (null != deleteMapping) {
+                methodType = HttpMethod.DELETE;
+                paths = deleteMapping.values();
+            }
+            if (null != putMapping) {
+                methodType = HttpMethod.PUT;
+                paths = putMapping.values();
+            }
+
+            if (null != paths && paths.length > 0) {
+                for (String path : paths) {
+                    String pathV = getRoutePath(path, nameSpace, suffix);
+                    this.buildRoute(router, method, pathV, methodType);
                 }
             }
+
         }
     }
 
     private String getRoutePath(String value, String nameSpace, String suffix) {
         String path = value.startsWith("/") ? value : "/" + value;
-
         nameSpace = nameSpace.startsWith("/") ? nameSpace : "/" + nameSpace;
         path = nameSpace + path;
-
         path = path.replaceAll("[/]+", "/");
-
         path = path.length() > 1 && path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
-
         path = path + suffix;
-
         return path;
     }
 
