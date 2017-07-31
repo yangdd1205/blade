@@ -19,14 +19,16 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
+ * Blade Const
+ *
  * @author biezhi
- *         2017/6/2
+ * 2017/6/2
  */
 public interface Const {
 
     int          DEFAULT_SERVER_PORT    = 9000;
     String       DEFAULT_SERVER_ADDRESS = "0.0.0.0";
-    String       VERSION                = "2.0.1-alpha1";
+    String       VERSION                = "2.0.1-alpha2";
     String       WEB_JARS               = "/webjars/";
     String       CLASSPATH              = Const.class.getResource("/").getPath();
     String       CONTENT_TYPE_HTML      = "text/html; charset=UTF-8";
@@ -48,7 +50,7 @@ public interface Const {
     String ENV_KEY_PAGE_404                = "mvc.view.404";
     String ENV_KEY_PAGE_500                = "mvc.view.500";
     String ENV_KEY_STATIC_DIRS             = "mvc.statics";
-    String ENV_KEY_STATIC_LIST             = "mvc.statics.list";
+    String ENV_KEY_STATIC_LIST             = "mvc.statics.show-list";
     String ENV_KEY_TEMPLATE_PATH           = "mvc.template.path";
     String ENV_KEY_SERVER_ADDRESS          = "server.address";
     String ENV_KEY_SERVER_PORT             = "server.port";
