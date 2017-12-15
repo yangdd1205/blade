@@ -1,22 +1,28 @@
 package com.blade.exception;
 
+import lombok.Data;
+
 /**
  * Blade Exception
  *
  * @author biezhi
- *         2017/5/31
+ * 2017/5/31
  */
-public class BladeException extends Exception {
+@Data
+public class BladeException extends RuntimeException {
 
-    public BladeException(String message) {
+    protected int    status;
+    protected String name;
+
+    public BladeException(int status, String name) {
+        this.status = status;
+        this.name = name;
+    }
+
+    public BladeException(int status, String name, String message) {
         super(message);
+        this.status = status;
+        this.name = name;
     }
 
-    public BladeException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public BladeException(Throwable cause) {
-        super(cause);
-    }
 }

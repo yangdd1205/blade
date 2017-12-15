@@ -1,6 +1,7 @@
 package com.blade.kit;
 
 import com.blade.mvc.Const;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -11,21 +12,28 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * date kit
+ * Date kit
  *
  * @author biezhi
- *         2017/6/2
+ * 2017/6/2
  */
+@NoArgsConstructor
 public final class DateKit {
 
-    private DateKit() {
-        throw new IllegalStateException("DateKit shouldn't be constructed!");
-    }
+    /**
+     * GMT Format
+     */
+    private static final DateTimeFormatter GMT_FMT     = DateTimeFormatter.ofPattern(Const.HTTP_DATE_FORMAT, Locale.US);
 
     /**
-     * return current unix time
+     * GMT ZoneId
+     */
+    private static final ZoneId            GMT_ZONE_ID = ZoneId.of("GMT");
+
+    /**
+     * get current unix time
      *
-     * @return
+     * @return return current unix time
      */
     public static int nowUnix() {
         return (int) Instant.now().getEpochSecond();
@@ -34,9 +42,9 @@ public final class DateKit {
     /**
      * format unix time to string
      *
-     * @param unixTime
-     * @param pattern
-     * @return
+     * @param unixTime unix time
+     * @param pattern  date format pattern
+     * @return return string date
      */
     public static String toString(long unixTime, String pattern) {
         return Instant.ofEpochSecond(unixTime).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(pattern));
@@ -45,12 +53,13 @@ public final class DateKit {
     /**
      * format date to string
      *
-     * @param date
-     * @param pattern
-     * @return
+     * @param date    date instance
+     * @param pattern date format pattern
+     * @return return string date
      */
     public static String toString(Date date, String pattern) {
-        return LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(pattern));
+        Instant instant = new java.util.Date((date.getTime())).toInstant();
+        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(pattern));
     }
 
     public static String toString(LocalDateTime date, String pattern) {
@@ -64,9 +73,9 @@ public final class DateKit {
     /**
      * format string time to unix time
      *
-     * @param time
-     * @param pattern
-     * @return
+     * @param time    string date
+     * @param pattern date format pattern
+     * @return return unix time
      */
     public static int toUnix(String time, String pattern) {
         LocalDateTime formatted = LocalDateTime.parse(time, DateTimeFormatter.ofPattern(pattern));
@@ -76,8 +85,8 @@ public final class DateKit {
     /**
      * format string (yyyy-MM-dd HH:mm:ss) to unix time
      *
-     * @param time
-     * @return
+     * @param time string datetime
+     * @return return unix time
      */
     public static int toUnix(String time) {
         return toUnix(time, "yyyy-MM-dd HH:mm:ss");
@@ -92,12 +101,22 @@ public final class DateKit {
         return Date.from(Instant.from(formatted.atStartOfDay(ZoneId.systemDefault())));
     }
 
+    public static Date toDateTime(String time, String pattern) {
+        LocalDateTime formatted = LocalDateTime.parse(time, DateTimeFormatter.ofPattern(pattern));
+        return Date.from(formatted.atZone(ZoneId.systemDefault()).toInstant());
+    }
+
+    public static LocalDate toLocalDate(String time, String pattern) {
+        return LocalDate.parse(time, DateTimeFormatter.ofPattern(pattern));
+    }
+
+    public static LocalDateTime toLocalDateTime(String time, String pattern) {
+        return LocalDateTime.parse(time, DateTimeFormatter.ofPattern(pattern));
+    }
+
     public static Date toDate(long unixTime) {
         return Date.from(Instant.ofEpochSecond(unixTime));
     }
-
-    private static final DateTimeFormatter GMT_FMT = DateTimeFormatter.ofPattern(Const.HTTP_DATE_FORMAT, Locale.US);
-    private static final ZoneId GMT_ZONE_ID = ZoneId.of("GMT");
 
     public static String gmtDate() {
         return GMT_FMT.format(LocalDateTime.now().atZone(GMT_ZONE_ID));

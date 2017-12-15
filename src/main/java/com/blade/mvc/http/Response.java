@@ -4,6 +4,7 @@ import com.blade.kit.JsonKit;
 import com.blade.mvc.Const;
 import com.blade.mvc.WebContext;
 import com.blade.mvc.ui.ModelAndView;
+import com.blade.mvc.wrapper.OutputStreamWrapper;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -11,20 +12,22 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.CharsetUtil;
-import lombok.NonNull;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Map;
 
 /**
  * Http Response
  *
  * @author biezhi
- *         2017/5/31
+ * 2017/5/31
  */
 public interface Response {
 
     /**
+     * Get current response http status code. e.g: 200
+     *
      * @return return response status code
      */
     int statusCode();
@@ -38,6 +41,8 @@ public interface Response {
     Response status(int status);
 
     /**
+     * Set current response http code 400
+     *
      * @return Setting Response Status is BadRequest and Return Response
      */
     default Response badRequest() {
@@ -45,6 +50,8 @@ public interface Response {
     }
 
     /**
+     * Set current response http code 401
+     *
      * @return Setting Response Status is unauthorized and Return Response
      */
     default Response unauthorized() {
@@ -52,6 +59,8 @@ public interface Response {
     }
 
     /**
+     * Set current response http code 404
+     *
      * @return Setting Response Status is notFound and Return Response
      */
     default Response notFound() {
@@ -64,28 +73,34 @@ public interface Response {
      * @param contentType content type
      * @return Return Response
      */
-    Response contentType(String contentType);
+    Response contentType(CharSequence contentType);
 
     /**
+     * Get current response headers: contentType
+     *
      * @return return response content-type
      */
     String contentType();
 
     /**
+     * Get current response headers
+     *
      * @return return response headers
      */
     Map<String, String> headers();
 
     /**
-     * setting header
+     * Set current response header
      *
      * @param name  Header Name
      * @param value Header Value
      * @return Return Response
      */
-    Response header(String name, String value);
+    Response header(CharSequence name, CharSequence value);
 
     /**
+     * Get current response cookies
+     *
      * @return return response cookies
      */
     Map<String, String> cookies();
@@ -94,7 +109,7 @@ public interface Response {
      * add raw response cookie
      *
      * @param cookie
-     * @return
+     * @return return Response instance
      */
     Response cookie(Cookie cookie);
 
@@ -144,7 +159,7 @@ public interface Response {
      * remove cookie
      *
      * @param name
-     * @return
+     * @return return Response instance
      */
     Response removeCookie(String name);
 
@@ -152,11 +167,12 @@ public interface Response {
      * Render by text
      *
      * @param text text content
-     * @return Return Response
      */
-    default void text(@NonNull String text) {
-        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(text.getBytes(CharsetUtil.UTF_8)));
-        this.contentType(Const.CONTENT_TYPE_TEXT);
+    default void text(String text) {
+        if (null == text) return;
+        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(text.getBytes(CharsetUtil.UTF_8)), false);
+        if (null == this.contentType())
+            this.contentType(Const.CONTENT_TYPE_TEXT);
         this.send(response);
     }
 
@@ -164,11 +180,12 @@ public interface Response {
      * Render by html
      *
      * @param html html content
-     * @return Return Response
      */
-    default void html(@NonNull String html) {
-        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(html.getBytes(CharsetUtil.UTF_8)));
-        this.contentType(Const.CONTENT_TYPE_HTML);
+    default void html(String html) {
+        if (null == html) return;
+        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(html.getBytes(CharsetUtil.UTF_8)), false);
+        if (null == this.contentType())
+            this.contentType(Const.CONTENT_TYPE_HTML);
         this.send(response);
     }
 
@@ -176,11 +193,11 @@ public interface Response {
      * Render by json
      *
      * @param json json content
-     * @return Return Response
      */
-    default void json(@NonNull String json) {
-        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(json.getBytes(CharsetUtil.UTF_8)));
-        if (!WebContext.request().isIE()) {
+    default void json(String json) {
+        if (null == json) return;
+        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(json.getBytes(CharsetUtil.UTF_8)), false);
+        if (null == this.contentType() && !WebContext.request().isIE()) {
             this.contentType(Const.CONTENT_TYPE_JSON);
         }
         this.send(response);
@@ -189,40 +206,62 @@ public interface Response {
     /**
      * Render by json
      *
-     * @param bean
-     * @return
+     * @param bean bean instance
      */
-    default void json(@NonNull Object bean) {
+    default void json(Object bean) {
+        if (null == bean) return;
         this.json(JsonKit.toString(bean));
     }
 
     /**
      * send body to client
      *
-     * @param data
+     * @param data body string
      */
-    default void body(@NonNull String data) {
-        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(data.getBytes(CharsetUtil.UTF_8)));
-        this.send(response);
-    }
-
-    default void body(@NonNull byte[] data) {
-        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(data));
-        this.send(response);
-    }
-
-    default void body(@NonNull ByteBuf byteBuf) {
-        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), byteBuf);
+    default void body(String data) {
+        if (null == data) return;
+        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(data.getBytes(CharsetUtil.UTF_8)), false);
         this.send(response);
     }
 
     /**
-     * download some file to clinet
+     * Send response body by byte array.
+     *
+     * @param data byte array data
+     */
+    default void body(byte[] data) {
+        if (null == data) return;
+        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), Unpooled.wrappedBuffer(data), false);
+        this.send(response);
+    }
+
+    /**
+     * Send response body by ByteBuf.
+     *
+     * @param byteBuf ByteBuf data
+     */
+    default void body(ByteBuf byteBuf) {
+        if (null == byteBuf) return;
+        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(statusCode()), byteBuf, false);
+        this.send(response);
+    }
+
+    /**
+     * download some file to client
      *
      * @param fileName give client file name
-     * @param file
+     * @param file     file storage location
      */
     void download(String fileName, File file) throws Exception;
+
+    /**
+     * create temp file outputStream
+     *
+     * @return return OutputStreamWrapper
+     * @throws IOException throw IOException
+     * @since 2.0.1-alpha3
+     */
+    OutputStreamWrapper outputStream() throws IOException;
 
     /**
      * Render view
@@ -230,7 +269,8 @@ public interface Response {
      * @param view view page
      * @return Return Response
      */
-    default void render(@NonNull String view) {
+    default void render(String view) {
+        if (null == view) return;
         this.render(new ModelAndView(view));
     }
 
@@ -250,10 +290,17 @@ public interface Response {
     void redirect(String newUri);
 
     /**
+     * Judge whether the current response has been submitted to the client
+     *
      * @return return current response is commit
      */
     boolean isCommit();
 
+    /**
+     * Send response by FullHttpResponse, custom build, please be careful
+     *
+     * @param response FullHttpResponse instance
+     */
     void send(FullHttpResponse response);
 
 }

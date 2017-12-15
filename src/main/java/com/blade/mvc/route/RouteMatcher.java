@@ -1,18 +1,17 @@
 package com.blade.mvc.route;
 
-import com.blade.exception.BladeException;
 import com.blade.ioc.annotation.Order;
 import com.blade.kit.Assert;
 import com.blade.kit.BladeKit;
 import com.blade.kit.PathKit;
 import com.blade.kit.ReflectKit;
+import com.blade.mvc.handler.RouteHandler;
 import com.blade.mvc.hook.Signature;
 import com.blade.mvc.hook.WebHook;
 import com.blade.mvc.http.HttpMethod;
 import com.blade.mvc.http.Request;
 import com.blade.mvc.http.Response;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Method;
 import java.net.URI;
@@ -30,9 +29,8 @@ import java.util.stream.Stream;
  * @author <a href="mailto:biezhi.me@gmail.com" target="_blank">biezhi</a>
  * @since 1.7.1-release
  */
+@Slf4j
 public class RouteMatcher {
-
-    private static final Logger log = LoggerFactory.getLogger(RouteMatcher.class);
 
     private static final Pattern PATH_VARIABLE_PATTERN = Pattern.compile(":(\\w+)");
     private static final String  PATH_VARIABLE_REPLACE = "([^/]+)";
@@ -51,14 +49,22 @@ public class RouteMatcher {
     private Map<HttpMethod, Integer>                            indexes            = new HashMap<>();
     private Map<HttpMethod, StringBuilder>                      patternBuilders    = new HashMap<>();
 
-    public Route addRoute(HttpMethod httpMethod, String path, RouteHandler handler, String methodName) throws NoSuchMethodException {
+    private Route addRoute(HttpMethod httpMethod, String path, RouteHandler handler, String methodName) throws NoSuchMethodException {
         Class<?> handleType = handler.getClass();
         Method   method     = handleType.getMethod(methodName, Request.class, Response.class);
         return addRoute(httpMethod, path, handler, RouteHandler.class, method);
     }
 
+    Route addRoute(Route route) {
+        String     path           = route.getPath();
+        HttpMethod httpMethod     = route.getHttpMethod();
+        Object     controller     = route.getTarget();
+        Class<?>   controllerType = route.getTargetType();
+        Method     method         = route.getAction();
+        return addRoute(httpMethod, path, controller, controllerType, method);
+    }
 
-    public Route addRoute(HttpMethod httpMethod, String path, Object controller, Class<?> controllerType, Method method) {
+    private Route addRoute(HttpMethod httpMethod, String path, Object controller, Class<?> controllerType, Method method) {
 
         // [/** | /*]
         path = "*".equals(path) ? "/.*" : path;
@@ -90,12 +96,13 @@ public class RouteMatcher {
         return route;
     }
 
-    public void addRoute(String path, RouteHandler handler, HttpMethod httpMethod) {
+    public Route addRoute(String path, RouteHandler handler, HttpMethod httpMethod) {
         try {
-            addRoute(httpMethod, path, handler, METHOD_NAME);
+            return addRoute(httpMethod, path, handler, METHOD_NAME);
         } catch (Exception e) {
             log.error("", e);
         }
+        return null;
     }
 
     public void route(String path, Class<?> clazz, String methodName) {
@@ -112,17 +119,18 @@ public class RouteMatcher {
     public void route(String path, Class<?> clazz, String methodName, HttpMethod httpMethod) {
         try {
             Assert.notNull(path, "Route path not is null!");
-            Assert.notNull(clazz, "Class EventType not is null!");
+            Assert.notNull(clazz, "Route type not is null!");
             Assert.notNull(methodName, "Method name not is null");
             Assert.notNull(httpMethod, "Request Method not is null");
 
             Method[] methods = classMethodPool.computeIfAbsent(clazz.getName(), k -> clazz.getMethods());
-            if (null != methods) {
-                for (Method method : methods) {
-                    if (method.getName().equals(methodName)) {
-                        Object controller = controllerPool.computeIfAbsent(clazz, k -> ReflectKit.newInstance(clazz));
-                        addRoute(httpMethod, path, controller, clazz, method);
-                    }
+            if (null == methods) {
+                return;
+            }
+            for (Method method : methods) {
+                if (method.getName().equals(methodName)) {
+                    Object controller = controllerPool.computeIfAbsent(clazz, k -> ReflectKit.newInstance(clazz));
+                    addRoute(httpMethod, path, controller, clazz, method);
                 }
             }
         } catch (Exception e) {
@@ -130,7 +138,7 @@ public class RouteMatcher {
         }
     }
 
-    public Route lookupRoute(String httpMethod, String path) throws BladeException {
+    public Route lookupRoute(String httpMethod, String path) throws Exception {
         path = parsePath(path);
         String routeKey = path + '#' + httpMethod.toUpperCase();
         Route  route    = staticRoutes.get(routeKey);
@@ -185,8 +193,22 @@ public class RouteMatcher {
             }
             return route;
         } catch (Exception e) {
-            throw new BladeException(e);
+            throw e;
         }
+    }
+
+    public boolean hasBeforeHook() {
+        return hooks.values().stream()
+                .flatMap(Collection::stream)
+                .filter(route -> route.getHttpMethod().equals(HttpMethod.BEFORE))
+                .count() > 0;
+    }
+
+    public boolean hasAfterHook() {
+        return hooks.values().stream()
+                .flatMap(Collection::stream)
+                .filter(route -> route.getHttpMethod().equals(HttpMethod.AFTER))
+                .count() > 0;
     }
 
     /**
@@ -273,12 +295,9 @@ public class RouteMatcher {
     }
 
     // a bad way
-    public void register() {
+    void register() {
         routes.values().forEach(route -> log.info("Add route => {}", route));
         hooks.values().forEach(route -> log.info("Add hook  => {}", route));
-
-        List<Route> routeHandlers = new ArrayList<>(routes.values());
-        routeHandlers.addAll(hooks.values().stream().findAny().orElse(new ArrayList<>()));
 
         Stream.of(routes.values(), hooks.values().stream().findAny().orElse(new ArrayList<>()))
                 .flatMap(Collection::stream).forEach(this::registerRoute);

@@ -28,6 +28,7 @@ public class IndexController {
 
     @GetRoute(value = "/hello")
     public void index(Response response) {
+//        int a = 1/0;
         response.text("hello world!");
     }
 
@@ -83,17 +84,17 @@ public class IndexController {
 
     @GetRoute(value = "empty")
     public void empty() {
-//        System.out.println("empty request");
+        System.out.println("empty request");
     }
 
     @GetRoute(value = "download")
     public void download(Response response) throws Exception {
-        String path = Const.CLASSPATH + "static/a.txt";
+        String path = Const.CLASSPATH + File.separator + "static/a.txt";
         response.download("文件.txt", new File(path));
     }
 
     @GetRoute(value = "redirect")
-    public void redirect(@QueryParam String url, Response response) {
+    public void redirect(@Param String url, Response response) {
         response.redirect(url);
     }
 }

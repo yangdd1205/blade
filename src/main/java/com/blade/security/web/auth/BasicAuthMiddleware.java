@@ -7,7 +7,8 @@ import com.blade.mvc.hook.WebHook;
 import com.blade.mvc.http.Request;
 import com.blade.mvc.http.Response;
 import lombok.extern.slf4j.Slf4j;
-import sun.misc.BASE64Decoder;
+
+import java.util.Base64;
 
 import static com.blade.mvc.Const.ENV_KEY_AUTH_PASSWORD;
 import static com.blade.mvc.Const.ENV_KEY_AUTH_USERNAME;
@@ -19,6 +20,9 @@ import static com.blade.mvc.Const.ENV_KEY_AUTH_USERNAME;
  */
 @Slf4j
 public class BasicAuthMiddleware implements WebHook {
+
+    private static final int AUTH_LENGTH = 6;
+    private static final int AUTH_FIELD_LENGTH = 2;
 
     private String username;
     private String password;
@@ -49,13 +53,13 @@ public class BasicAuthMiddleware implements WebHook {
         String auth = request.header("Authorization");
         log.debug("Authorization: {}", auth);
 
-        if (StringKit.isNotBlank(auth) && auth.length() > 6) {
+        if (StringKit.isNotBlank(auth) && auth.length() > AUTH_LENGTH) {
             auth = auth.substring(6, auth.length());
             String decodedAuth = getFromBASE64(auth);
             log.debug("Authorization decode: {}", decodedAuth);
 
             String[] arr = decodedAuth.split(":");
-            if (arr.length == 2) {
+            if (arr.length == AUTH_FIELD_LENGTH) {
                 if (username.equals(arr[0]) && password.equals(arr[1])) {
                     request.session().attribute("basic_auth", decodedAuth);
                     return true;
@@ -69,9 +73,8 @@ public class BasicAuthMiddleware implements WebHook {
     private String getFromBASE64(String s) {
         if (s == null)
             return null;
-        BASE64Decoder decoder = new BASE64Decoder();
         try {
-            byte[] b = decoder.decodeBuffer(s);
+            byte[] b = Base64.getDecoder().decode(s);
             return new String(b);
         } catch (Exception e) {
             return null;

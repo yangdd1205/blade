@@ -20,7 +20,6 @@ import org.objectweb.asm.*;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,46 +31,38 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class AsmKit {
 
-    private static final Map<Method, String[]> pool = new ConcurrentHashMap<>();
+    /**
+     * Cached method names
+     */
+    private static final Map<Method, String[]> METHOD_NAMES_POOL = new ConcurrentHashMap<>(64);
 
     /**
-     * <p>
-     * 比较参数类型是否一致
-     * </p>
+     * Compare whether the parameter type is consistent
      *
-     * @param types   asm的类型({@link Type})
-     * @param clazzes java 类型({@link Class})
-     * @return
+     * @param types   the type of the asm({@link Type})
+     * @param classes java type({@link Class})
+     * @return return param type equals
      */
-    private static boolean sameType(Type[] types, Class<?>[] clazzes) {
-        // 个数不同
-        if (types.length != clazzes.length) {
-            return false;
-        }
+    private static boolean sameType(Type[] types, Class<?>[] classes) {
+        if (types.length != classes.length) return false;
         for (int i = 0; i < types.length; i++) {
-            if (!Type.getType(clazzes[i]).equals(types[i])) {
-                return false;
-            }
+            if (!Type.getType(classes[i]).equals(types[i])) return false;
         }
         return true;
     }
 
     /**
-     * <p>
-     * 获取方法的参数名
-     * </p>
+     * get method param names
      *
-     * @param m
-     * @return
+     * @param m method
+     * @return return method param names
      */
     public static String[] getMethodParamNames(final Method m) throws IOException {
-        if (pool.containsKey(m)) {
-            return pool.get(m);
-        }
+        if (METHOD_NAMES_POOL.containsKey(m)) return METHOD_NAMES_POOL.get(m);
 
         final String[] paramNames = new String[m.getParameterTypes().length];
-        final String n = m.getDeclaringClass().getName();
-        ClassReader cr = null;
+        final String   n          = m.getDeclaringClass().getName();
+        ClassReader    cr;
         try {
             cr = new ClassReader(n);
         } catch (IOException e) {
@@ -79,21 +70,19 @@ public final class AsmKit {
         }
         cr.accept(new ClassVisitor(Opcodes.ASM5) {
             @Override
-            public MethodVisitor visitMethod(final int access, final String name, final String desc,
-                                             final String signature, final String[] exceptions) {
+            public MethodVisitor visitMethod(final int access, final String name, final String desc, final String signature, final String[] exceptions) {
                 final Type[] args = Type.getArgumentTypes(desc);
-                // 方法名相同并且参数个数相同
+                // The method name is the same and the number of parameters is the same
                 if (!name.equals(m.getName()) || !sameType(args, m.getParameterTypes())) {
                     return super.visitMethod(access, name, desc, signature, exceptions);
                 }
                 MethodVisitor v = super.visitMethod(access, name, desc, signature, exceptions);
                 return new MethodVisitor(Opcodes.ASM5, v) {
                     @Override
-                    public void visitLocalVariable(String name, String desc, String signature, Label start, Label end,
-                                                   int index) {
+                    public void visitLocalVariable(String name, String desc, String signature, Label start, Label end, int index) {
                         int i = index - 1;
-                        // 如果是静态方法，则第一就是参数
-                        // 如果不是静态方法，则第一个是"this"，然后才是方法的参数
+                        // if it is a static method, the first is the parameter
+                        // if it's not a static method, the first one is "this" and then the parameter of the method
                         if (Modifier.isStatic(m.getModifiers())) {
                             i = index;
                         }
@@ -105,7 +94,7 @@ public final class AsmKit {
                 };
             }
         }, 0);
-        pool.put(m, paramNames);
+        METHOD_NAMES_POOL.put(m, paramNames);
         return paramNames;
     }
 

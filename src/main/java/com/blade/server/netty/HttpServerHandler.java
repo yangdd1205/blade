@@ -1,42 +1,35 @@
 package com.blade.server.netty;
 
 import com.blade.Blade;
-import com.blade.exception.BladeException;
-import com.blade.exception.ExceptionResolve;
-import com.blade.kit.BladeKit;
+import com.blade.exception.NotFoundException;
+import com.blade.kit.DateKit;
 import com.blade.mvc.WebContext;
-import com.blade.mvc.handler.RouteViewResolve;
+import com.blade.mvc.handler.ExceptionHandler;
+import com.blade.mvc.handler.RequestInvoker;
 import com.blade.mvc.hook.Signature;
-import com.blade.mvc.hook.WebHook;
 import com.blade.mvc.http.HttpRequest;
 import com.blade.mvc.http.HttpResponse;
 import com.blade.mvc.http.Request;
 import com.blade.mvc.http.Response;
 import com.blade.mvc.route.Route;
-import com.blade.mvc.route.RouteHandler;
 import com.blade.mvc.route.RouteMatcher;
-import com.blade.mvc.ui.DefaultUI;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
+import io.netty.util.AsciiString;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
-
-import static com.blade.mvc.Const.ENV_KEY_PAGE_404;
-import static com.blade.mvc.Const.ENV_KEY_PAGE_500;
-import static io.netty.handler.codec.http.HttpUtil.is100ContinueExpected;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
+ * Http Server Handler
+ *
  * @author biezhi
  * 2017/5/31
  */
@@ -44,204 +37,125 @@ import static io.netty.handler.codec.http.HttpUtil.is100ContinueExpected;
 @ChannelHandler.Sharable
 public class HttpServerHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
-    private final Blade             blade;
     private final RouteMatcher      routeMatcher;
     private final Set<String>       statics;
-    private final Optional<String>  page404;
-    private final Optional<String>  page500;
-    private final SessionHandler    sessionHandler;
     private final StaticFileHandler staticFileHandler;
-    private final RouteViewResolve  routeViewResolve;
-    private final ExceptionResolve  exceptionResolve;
+    private final RequestInvoker    requestInvoker;
+    private final ExceptionHandler  exceptionHandler;
+    public static SessionHandler SESSION_HANDLER = null;
+    private final boolean hasMiddleware;
+    private final boolean hasBeforeHook;
+    private final boolean hasAfterHook;
 
-    HttpServerHandler(Blade blade, ExceptionResolve exceptionResolve) {
-        this.blade = blade;
+    private volatile CharSequence date = new AsciiString(DateKit.gmtDate(LocalDateTime.now()));
+
+
+    HttpServerHandler(Blade blade, ScheduledExecutorService service) {
         this.statics = blade.getStatics();
-        this.exceptionResolve = exceptionResolve;
 
-        this.page404 = Optional.ofNullable(blade.environment().get(ENV_KEY_PAGE_404, null));
-        this.page500 = Optional.ofNullable(blade.environment().get(ENV_KEY_PAGE_500, null));
+        service.scheduleWithFixedDelay(() -> date = new AsciiString(DateKit.gmtDate(LocalDateTime.now())), 1000, 1000, TimeUnit.MILLISECONDS);
+
+        this.exceptionHandler = blade.exceptionHandler();
 
         this.routeMatcher = blade.routeMatcher();
-        this.routeViewResolve = new RouteViewResolve(blade);
+        this.requestInvoker = new RequestInvoker(blade);
         this.staticFileHandler = new StaticFileHandler(blade);
-        this.sessionHandler = blade.sessionManager() != null ? new SessionHandler(blade) : null;
+
+        this.hasMiddleware = routeMatcher.getMiddleware().size() > 0;
+        this.hasBeforeHook = routeMatcher.hasBeforeHook();
+        this.hasAfterHook = routeMatcher.hasAfterHook();
+
+        HttpServerHandler.SESSION_HANDLER = blade.sessionManager() != null ? new SessionHandler(blade) : null;
     }
 
     @Override
-    public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
-        super.channelRegistered(ctx);
-    }
-
-    @Override
-    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest fullHttpRequest) throws Exception {
-        if (is100ContinueExpected(fullHttpRequest)) {
-            ctx.write(new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.CONTINUE));
-        }
-
-        Request  request  = HttpRequest.build(ctx, fullHttpRequest, sessionHandler);
-        Response response = HttpResponse.build(ctx, blade.templateEngine());
-
+    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest fullHttpRequest) {
+        Request  request  = HttpRequest.build(ctx, fullHttpRequest);
+        Response response = HttpResponse.build(ctx, date);
+        boolean  isStatic = false;
         // route signature
         Signature signature = Signature.builder().request(request).response(response).build();
-
         try {
+
             // request uri
             String uri = request.uri();
-            log.debug("{}\t{}\t{}", request.protocol(), request.method(), uri);
 
             // write session
             WebContext.set(new WebContext(request, response));
 
             if (isStaticFile(uri)) {
                 staticFileHandler.handle(ctx, request, response);
+                isStatic = true;
                 return;
             }
 
             Route route = routeMatcher.lookupRoute(request.method(), uri);
             if (null == route) {
-                // 404
-                response.notFound();
-                if (page404.isPresent()) {
-                    response.render(page404.get());
-                } else {
-                    String html = String.format(DefaultUI.VIEW_404, uri);
-                    response.html(html);
-                }
-                return;
+                log.warn("Not Found\t{}", uri);
+                throw new NotFoundException();
             }
+
+            log.info("{}\t{}\t{}", request.protocol(), request.method(), uri);
+
             request.initPathParams(route);
 
             // get method parameters
             signature.setRoute(route);
 
             // middleware
-            if (!invokeMiddleware(routeMatcher.getMiddleware(), signature)) {
+            if (hasMiddleware && !requestInvoker.invokeMiddleware(routeMatcher.getMiddleware(), signature)) {
                 this.sendFinish(response);
                 return;
             }
 
             // web hook before
-            if (!invokeHook(routeMatcher.getBefore(uri), signature)) {
+            if (hasBeforeHook && !requestInvoker.invokeHook(routeMatcher.getBefore(uri), signature)) {
                 this.sendFinish(response);
                 return;
             }
 
             // execute
             signature.setRoute(route);
-            this.routeHandle(signature);
+            requestInvoker.routeHandle(signature);
 
             // webHook
-            this.invokeHook(routeMatcher.getAfter(uri), signature);
-
+            if (hasAfterHook) {
+                requestInvoker.invokeHook(routeMatcher.getAfter(uri), signature);
+            }
         } catch (Exception e) {
-            if (null != exceptionResolve && !exceptionResolve.handle(e, signature)) {
+            if (null != exceptionHandler) {
+                exceptionHandler.handle(e);
             } else {
-                throw e;
+                log.error("Blade Invoke Error", e);
             }
         } finally {
-            this.sendFinish(response);
+            if (!isStatic) this.sendFinish(response);
             WebContext.remove();
         }
     }
 
     @Override
     public void channelReadComplete(ChannelHandlerContext ctx) {
-        ctx.flush();
-    }
-
-    @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        super.channelInactive(ctx);
+        if (ctx.channel().isOpen() && ctx.channel().isActive() && ctx.channel().isWritable()) {
+            ctx.flush();
+        }
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        log.error("error", cause);
-        if (!ctx.channel().isActive()) {
-            ctx.close();
-            return;
-        }
-        Response     response = WebContext.response();
-        String       error    = cause.getMessage();
-        StringWriter sw       = new StringWriter();
-        PrintWriter  writer   = new PrintWriter(sw);
-        if (page500.isPresent()) {
-            cause.printStackTrace(writer);
-            WebContext.request().attribute("err_message", error);
-            WebContext.request().attribute("err_stackTrace", sw.toString());
-            response.render(page500.get());
+        if (null != exceptionHandler) {
+            exceptionHandler.handle((Exception) cause);
         } else {
-            if (blade.devMode()) {
-                writer.write(String.format(DefaultUI.ERROR_START, cause.getClass() + " : " + cause.getMessage()));
-                writer.write("\r\n");
-                cause.printStackTrace(writer);
-                writer.println(DefaultUI.HTML_FOOTER);
-                error = sw.toString();
-                response.html(error);
-            } else {
-                response.body("Internal Server Error");
-            }
+            log.error("Blade Invoke Error", cause);
+        }
+        if (ctx.channel().isOpen() && ctx.channel().isActive() && ctx.channel().isWritable()) {
+            ctx.close();
         }
     }
 
     private boolean isStaticFile(String uri) {
         Optional<String> result = statics.stream().filter(s -> s.equals(uri) || uri.startsWith(s)).findFirst();
         return result.isPresent();
-    }
-
-    /**
-     * Actual routing method execution
-     *
-     * @param signature signature
-     */
-    private boolean routeHandle(Signature signature) throws Exception {
-        Object target = signature.getRoute().getTarget();
-        if (null == target) {
-            Class<?> clazz = signature.getAction().getDeclaringClass();
-            target = blade.getBean(clazz);
-            signature.getRoute().setTarget(target);
-        }
-        if (signature.getRoute().getTargetType() == RouteHandler.class) {
-            RouteHandler routeHandler = (RouteHandler) target;
-            routeHandler.handle(signature.request(), signature.response());
-            return false;
-        } else {
-            return routeViewResolve.handle(signature);
-        }
-    }
-
-    private boolean invokeMiddleware(List<Route> middleware, Signature signature) throws BladeException {
-        if (BladeKit.isEmpty(middleware)) {
-            return true;
-        }
-        for (Route route : middleware) {
-            WebHook webHook = (WebHook) route.getTarget();
-            boolean flag    = webHook.before(signature);
-            if (!flag) return false;
-        }
-        return true;
-    }
-
-    /**
-     * invoke hooks
-     *
-     * @param hooks     webHook list
-     * @param signature http request
-     * @return
-     * @throws BladeException
-     */
-    private boolean invokeHook(List<Route> hooks, Signature signature) throws BladeException {
-        for (Route route : hooks) {
-            if (route.getTargetType() == RouteHandler.class) {
-                RouteHandler routeHandler = (RouteHandler) route.getTarget();
-                routeHandler.handle(signature.request(), signature.response());
-            } else {
-                boolean flag = routeViewResolve.invokeHook(signature, route);
-                if (!flag) return false;
-            }
-        }
-        return true;
     }
 
     private void sendFinish(Response response) {

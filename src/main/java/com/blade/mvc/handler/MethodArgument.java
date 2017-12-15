@@ -1,7 +1,10 @@
 package com.blade.mvc.handler;
 
 import com.blade.exception.BladeException;
-import com.blade.kit.*;
+import com.blade.kit.AsmKit;
+import com.blade.kit.JsonKit;
+import com.blade.kit.ReflectKit;
+import com.blade.kit.StringKit;
 import com.blade.mvc.annotation.*;
 import com.blade.mvc.hook.Signature;
 import com.blade.mvc.http.HttpSession;
@@ -13,10 +16,19 @@ import com.blade.mvc.ui.ModelAndView;
 
 import java.lang.reflect.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Route method param parse
+ *
+ * @author biezhi
+ * 2017/9/20
+ */
 public final class MethodArgument {
 
     public static Object[] getArgs(Signature signature) throws Exception {
@@ -30,11 +42,9 @@ public final class MethodArgument {
 
         for (int i = 0, len = parameters.length; i < len; i++) {
             Parameter parameter = parameters[i];
-
-            String   paramName   = parameterNames[i];
-            int      annotations = parameter.getAnnotations().length;
-            Class<?> argType     = parameter.getType();
-            if (annotations > 0) {
+            String    paramName = parameterNames[i];
+            Class<?>  argType   = parameter.getType();
+            if (containsAnnotation(parameter)) {
                 args[i] = getAnnotationParam(parameter, paramName, request);
                 continue;
             }
@@ -45,6 +55,15 @@ public final class MethodArgument {
             args[i] = getCustomType(parameter, signature);
         }
         return args;
+    }
+
+    private static boolean containsAnnotation(Parameter parameter) {
+        return parameter.getAnnotation(PathParam.class) != null ||
+                parameter.getAnnotation(Param.class) != null ||
+                parameter.getAnnotation(HeaderParam.class) != null ||
+                parameter.getAnnotation(BodyParam.class) != null ||
+                parameter.getAnnotation(CookieParam.class) != null ||
+                parameter.getAnnotation(MultipartParam.class) != null;
     }
 
     private static Object getCustomType(Parameter parameter, Signature signature) throws Exception {
@@ -74,27 +93,27 @@ public final class MethodArgument {
     }
 
     private static Object getAnnotationParam(Parameter parameter, String paramName, Request request) throws Exception {
-        Class<?>   argType    = parameter.getType();
-        QueryParam queryParam = parameter.getAnnotation(QueryParam.class);
-        if (null != queryParam) {
-            return getQueryParam(argType, queryParam, paramName, request);
+        Class<?> argType = parameter.getType();
+        Param    param   = parameter.getAnnotation(Param.class);
+        if (null != param) {
+            return getQueryParam(ParamStrut.builder().argType(argType).param(param).paramName(paramName).request(request).build());
         }
         BodyParam bodyParam = parameter.getAnnotation(BodyParam.class);
         if (null != bodyParam) {
-            return getBodyParam(argType, request);
+            return getBodyParam(ParamStrut.builder().argType(argType).request(request).build());
         }
         PathParam pathParam = parameter.getAnnotation(PathParam.class);
         if (null != pathParam) {
-            return getPathParam(argType, pathParam, paramName, request);
+            return getPathParam(ParamStrut.builder().argType(argType).pathParam(pathParam).paramName(paramName).request(request).build());
         }
         HeaderParam headerParam = parameter.getAnnotation(HeaderParam.class);
         if (null != headerParam) {
-            return getHeader(argType, headerParam, paramName, request);
+            return getHeader(ParamStrut.builder().argType(argType).headerParam(headerParam).paramName(paramName).request(request).build());
         }
         // cookie param
         CookieParam cookieParam = parameter.getAnnotation(CookieParam.class);
         if (null != cookieParam) {
-            return getCookie(argType, cookieParam, paramName, request);
+            return getCookie(ParamStrut.builder().argType(argType).cookieParam(cookieParam).paramName(paramName).request(request).build());
         }
         // form multipart
         MultipartParam multipartParam = parameter.getAnnotation(MultipartParam.class);
@@ -105,7 +124,10 @@ public final class MethodArgument {
         return null;
     }
 
-    private static Object getBodyParam(Class<?> argType, Request request) throws BladeException {
+    private static Object getBodyParam(ParamStrut paramStrut) throws Exception {
+        Class<?> argType = paramStrut.argType;
+        Request  request = paramStrut.request;
+
         if (ReflectKit.isPrimitive(argType)) {
             return ReflectKit.convert(argType, request.bodyToString());
         } else {
@@ -114,128 +136,96 @@ public final class MethodArgument {
         }
     }
 
-    private static Object getQueryParam(Class<?> argType, QueryParam queryParam, String paramName, Request request) throws BladeException {
-        String name = StringKit.isBlank(queryParam.name()) ? paramName : queryParam.name();
-
-        if (ReflectKit.isPrimitive(argType)) {
-            Optional<String> val      = request.query(name);
-            boolean          required = queryParam.required();
-            if (!val.isPresent()) {
-                val = Optional.of(queryParam.defaultValue());
+    private static Object getQueryParam(ParamStrut paramStrut) throws Exception {
+        Param    param     = paramStrut.param;
+        String   paramName = paramStrut.paramName;
+        Class<?> argType   = paramStrut.argType;
+        Request  request   = paramStrut.request;
+        String   name;
+        if (null != param) {
+            name = StringKit.isBlank(param.name()) ? paramName : param.name();
+            if (ReflectKit.isPrimitive(argType) || argType.equals(Date.class) || argType.equals(BigDecimal.class)
+                    || argType.equals(LocalDate.class) || argType.equals(LocalDateTime.class)) {
+                Optional<String> val = request.query(name);
+                if (!val.isPresent()) {
+                    val = Optional.of(null != param ? param.defaultValue() : param.defaultValue());
+                }
+                return ReflectKit.convert(argType, val.get());
+            } else {
+                name = null != param ? param.name() : param.name();
+                return parseModel(argType, request, name);
             }
-            if (required && !val.isPresent()) {
-                Assert.throwException(String.format("query param [%s] not is empty.", paramName));
-            }
-            return getRequestParam(argType, val.get());
-        } else {
-            return parseModel(argType, request, name);
         }
+        return null;
     }
 
-    private static Object getCookie(Class<?> argType, CookieParam cookieParam, String paramName, Request request) throws BladeException {
+    private static Object getCookie(ParamStrut paramStrut) throws BladeException {
+        Class<?>    argType     = paramStrut.argType;
+        CookieParam cookieParam = paramStrut.cookieParam;
+        String      paramName   = paramStrut.paramName;
+        Request     request     = paramStrut.request;
+
         String           cookieName = StringKit.isBlank(cookieParam.value()) ? paramName : cookieParam.value();
         Optional<String> val        = request.cookie(cookieName);
-        boolean          required   = cookieParam.required();
         if (!val.isPresent()) {
             val = Optional.of(cookieParam.defaultValue());
         }
-        if (required && !val.isPresent()) {
-            Assert.throwException(String.format("cookie param [%s] not is empty.", paramName));
-        }
-        return getRequestParam(argType, val.get());
+        return ReflectKit.convert(argType, val.get());
     }
 
-    private static Object getHeader(Class<?> argType, HeaderParam headerParam, String paramName, Request request) throws BladeException {
-        String  key      = StringKit.isBlank(headerParam.value()) ? paramName : headerParam.value();
-        String  val      = request.header(key);
-        boolean required = headerParam.required();
+    private static Object getHeader(ParamStrut paramStrut) throws BladeException {
+        Class<?>    argType     = paramStrut.argType;
+        HeaderParam headerParam = paramStrut.headerParam;
+        String      paramName   = paramStrut.paramName;
+        Request     request     = paramStrut.request;
+
+        String key = StringKit.isBlank(headerParam.value()) ? paramName : headerParam.value();
+        String val = request.header(key);
         if (StringKit.isBlank(val)) {
             val = headerParam.defaultValue();
         }
-        if (required && StringKit.isBlank(val)) {
-            Assert.throwException(String.format("header param [%s] not is empty.", paramName));
-        }
-        return getRequestParam(argType, val);
+        return ReflectKit.convert(argType, val);
     }
 
-    private static Object getPathParam(Class<?> argType, PathParam pathParam, String paramName, Request request) {
+    private static Object getPathParam(ParamStrut paramStrut) {
+        Class<?>  argType   = paramStrut.argType;
+        PathParam pathParam = paramStrut.pathParam;
+        String    paramName = paramStrut.paramName;
+        Request   request   = paramStrut.request;
+
         String name = StringKit.isBlank(pathParam.name()) ? paramName : pathParam.name();
         String val  = request.pathString(name);
         if (StringKit.isBlank(val)) {
             val = pathParam.defaultValue();
         }
-        return getRequestParam(argType, val);
+        return ReflectKit.convert(argType, val);
     }
 
-    private static Object parseModel(Class<?> argType, Request request, String name) throws BladeException {
-        try {
-            Field[] fields = argType.getDeclaredFields();
-            if (null == fields || fields.length == 0) {
-                return null;
-            }
-            Object  obj      = ReflectKit.newInstance(argType);
-            boolean hasField = false;
+    private static Object parseModel(Class<?> argType, Request request, String name) throws Exception {
+        Field[] fields = argType.getDeclaredFields();
+        if (null == fields || fields.length == 0) {
+            return null;
+        }
+        Object  obj      = ReflectKit.newInstance(argType);
+        boolean hasField = false;
 
-            for (Field field : fields) {
-                field.setAccessible(true);
-                if (field.getName().equals("serialVersionUID")) {
-                    continue;
-                }
-                Optional<String> fieldValue = request.query(field.getName());
-                if (null != name) {
-                    String fieldName = name + "[" + field.getName() + "]";
-                    fieldValue = request.query(fieldName);
-                }
-                if (fieldValue.isPresent() && StringKit.isNotBlank(fieldValue.get())) {
-                    Object value = ReflectKit.convert(field.getType(), fieldValue.get());
-                    field.set(obj, value);
-                    hasField = true;
-                }
+        for (Field field : fields) {
+            field.setAccessible(true);
+            if ("serialVersionUID".equals(field.getName())) {
+                continue;
             }
-            return hasField ? obj : null;
-        } catch (Exception e) {
-            throw new BladeException(e);
-        }
-    }
-
-    private static Object getRequestParam(Class<?> parameterType, String val) {
-        Object result = null;
-        if (parameterType.equals(String.class)) {
-            return val;
-        }
-        if (StringKit.isBlank(val)) {
-            if (parameterType.equals(int.class) || parameterType.equals(double.class) ||
-                    parameterType.equals(short.class) || parameterType.equals(long.class) ||
-                    parameterType.equals(byte.class) || parameterType.equals(float.class)) {
-                result = 0;
+            Optional<String> fieldValue = request.query(field.getName());
+            if (StringKit.isNotBlank(name)) {
+                String fieldName = name + "[" + field.getName() + "]";
+                fieldValue = request.query(fieldName);
             }
-            if (parameterType.equals(boolean.class)) {
-                result = false;
-            }
-        } else {
-            if (parameterType.equals(Integer.class) || parameterType.equals(int.class)) {
-                result = Integer.parseInt(val);
-            }
-            if (parameterType.equals(Long.class) || parameterType.equals(long.class)) {
-                result = Long.parseLong(val);
-            }
-            if (parameterType.equals(Double.class) || parameterType.equals(double.class)) {
-                result = Double.parseDouble(val);
-            }
-            if (parameterType.equals(Float.class) || parameterType.equals(float.class)) {
-                result = Float.parseFloat(val);
-            }
-            if (parameterType.equals(Boolean.class) || parameterType.equals(boolean.class)) {
-                result = Boolean.parseBoolean(val);
-            }
-            if (parameterType.equals(Byte.class) || parameterType.equals(byte.class)) {
-                result = Byte.parseByte(val);
-            }
-            if (parameterType.equals(BigDecimal.class)) {
-                result = new BigDecimal(val);
+            if (fieldValue.isPresent() && StringKit.isNotBlank(fieldValue.get())) {
+                Object value = ReflectKit.convert(field.getType(), fieldValue.get());
+                field.set(obj, value);
+                hasField = true;
             }
         }
-        return result;
+        return hasField ? obj : null;
     }
 
 }

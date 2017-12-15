@@ -16,7 +16,7 @@
 package com.blade.event;
 
 import com.blade.Blade;
-import com.blade.ioc.OrderComparator;
+import com.blade.ioc.bean.OrderComparator;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -24,6 +24,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Event manager
+ *
+ * @author biezhi
+ * @date 2017/9/18
+ */
 public class EventManager {
 
     private Map<EventType, List<EventListener>> listenerMap = null;
@@ -43,7 +49,7 @@ public class EventManager {
                 .forEach(listener -> listener.trigger(new Event(type, blade)));
     }
 
-    public void fireEvent(EventType type) {
+    void fireEvent(EventType type) {
         fireEvent(type, null);
     }
 

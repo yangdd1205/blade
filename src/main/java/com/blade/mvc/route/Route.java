@@ -1,7 +1,11 @@
 package com.blade.mvc.route;
 
-import com.blade.mvc.http.HttpMethod;
 import com.blade.kit.PathKit;
+import com.blade.mvc.http.HttpMethod;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -9,10 +13,18 @@ import java.util.Map;
 
 /**
  * Route Bean
+ * <p>
+ * A route identifies the smallest unit of the request,
+ * which encapsulates the path of the request,
+ * the Http method, and the method of executing the route
  *
  * @author <a href="mailto:biezhi.me@gmail.com" target="_blank">biezhi</a>
  * @since 1.5
  */
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode
 public class Route {
 
     /**
@@ -45,10 +57,7 @@ public class Route {
     /**
      * Url path params
      */
-    private Map<String, String> pathParams = new HashMap<>();
-
-    public Route() {
-    }
+    private Map<String, String> pathParams = new HashMap<>(8);
 
     public Route(HttpMethod httpMethod, String path, Class<?> targetType, Method action) {
         super();
@@ -67,80 +76,110 @@ public class Route {
         this.action = action;
     }
 
+    /**
+     * Return http method
+     *
+     * @return HttpMethod
+     */
     public HttpMethod getHttpMethod() {
         return httpMethod;
     }
 
+    /**
+     * Return route path
+     *
+     * @return path string
+     */
     public String getPath() {
         return path;
     }
 
+    /**
+     * Set route path
+     *
+     * @param path string path
+     */
     public void setPath(String path) {
         this.path = path;
     }
 
+    /**
+     * Return route controller instance
+     *
+     * @return route handler instance
+     */
     public Object getTarget() {
         return target;
     }
 
+    /**
+     * Set route handler instance
+     *
+     * @param target target bean
+     */
     public void setTarget(Object target) {
         this.target = target;
     }
 
+    /**
+     * Return route method
+     *
+     * @return route Method
+     */
     public Method getAction() {
         return action;
     }
 
+    /**
+     * Get route handler type
+     *
+     * @return return target type
+     */
     public Class<?> getTargetType() {
         return targetType;
     }
 
+    /**
+     * Get route path parameters
+     *
+     * @return return path params
+     */
     public Map<String, String> getPathParams() {
         return pathParams;
     }
 
+    /**
+     * Set path params
+     *
+     * @param pathParams path params map
+     */
     public void setPathParams(Map<String, String> pathParams) {
         this.pathParams = pathParams;
     }
 
+    /**
+     * Get route execution sort, default is Integer.MAX_VALUE
+     *
+     * @return return sort
+     */
     public int getSort() {
         return sort;
     }
 
+    /**
+     * Set route execution sort
+     *
+     * @param sort sort number
+     */
     public void setSort(int sort) {
         this.sort = sort;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        Route route = (Route) o;
-
-        if (sort != route.sort) return false;
-        if (httpMethod != route.httpMethod) return false;
-        if (path != null ? !path.equals(route.path) : route.path != null) return false;
-        if (target != null ? !target.equals(route.target) : route.target != null) return false;
-        if (targetType != null ? !targetType.equals(route.targetType) : route.targetType != null) return false;
-        if (action != null ? !action.equals(route.action) : route.action != null) return false;
-        if (pathParams != null ? !pathParams.equals(route.pathParams) : route.pathParams != null) return false;
-
-        return true;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = httpMethod != null ? httpMethod.hashCode() : 0;
-        result = 31 * result + (path != null ? path.hashCode() : 0);
-        result = 31 * result + (target != null ? target.hashCode() : 0);
-        result = 31 * result + (targetType != null ? targetType.hashCode() : 0);
-        result = 31 * result + (action != null ? action.hashCode() : 0);
-        result = 31 * result + sort;
-        result = 31 * result + (pathParams != null ? pathParams.hashCode() : 0);
-        return result;
-    }
-
+    /**
+     * Route to string
+     *
+     * @return return route string
+     */
     @Override
     public String toString() {
         return httpMethod + "\t" + path;

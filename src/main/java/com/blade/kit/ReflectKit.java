@@ -1,19 +1,18 @@
 package com.blade.kit;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.List;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.stream.Stream;
 
 /**
  * @author biezhi
- *         2017/5/31
+ * 2017/5/31
  */
 public class ReflectKit {
-
-    private static final List EMPTY_LIST = new ArrayList(0);
 
     public static <T> T newInstance(Class<T> cls) {
         try {
@@ -24,36 +23,60 @@ public class ReflectKit {
     }
 
     public static Object convert(Class<?> type, String value) {
-        if (type == Integer.class) {
+
+        if (StringKit.isBlank(value)) {
+            if (type.equals(int.class) || type.equals(double.class) ||
+                    type.equals(short.class) || type.equals(long.class) ||
+                    type.equals(byte.class) || type.equals(float.class)) {
+                return 0;
+            }
+            if (type.equals(boolean.class)) {
+                return false;
+            }
+            return null;
+        }
+
+        if (type.equals(int.class) || type.equals(Integer.class)) {
             return Integer.parseInt(value);
-        } else if (type == String.class) {
+        } else if (type.equals(String.class)) {
             return value;
-        } else if (type == Double.class) {
+        } else if (type.equals(Double.class) || type.equals(double.class)) {
             return Double.parseDouble(value);
-        } else if (type == Float.class) {
+        } else if (type.equals(Float.class) || type.equals(float.class)) {
             return Float.parseFloat(value);
-        } else if (type == Long.class) {
+        } else if (type.equals(Long.class) || type.equals(long.class)) {
             return Long.parseLong(value);
-        } else if (type == Boolean.class) {
+        } else if (type.equals(Boolean.class) || type.equals(boolean.class)) {
             return Boolean.parseBoolean(value);
-        } else if (type == Short.class) {
+        } else if (type.equals(Short.class) || type.equals(short.class)) {
             return Short.parseShort(value);
+        } else if (type.equals(Byte.class) || type.equals(byte.class)) {
+            return Byte.parseByte(value);
+        } else if (type.equals(BigDecimal.class)) {
+            return new BigDecimal(value);
+        } else if (type.equals(Date.class)) {
+            if (value.length() == 10) return DateKit.toDate(value, "yyyy-MM-dd");
+            return DateKit.toDateTime(value, "yyyy-MM-dd HH:mm:ss");
+        } else if (type.equals(LocalDate.class)) {
+            return DateKit.toLocalDate(value, "yyyy-MM-dd");
+        } else if (type.equals(LocalDateTime.class)) {
+            return DateKit.toLocalDateTime(value, "yyyy-MM-dd HH:mm:ss");
         }
         return value;
     }
 
     /**
-     * @param bean   类实例
-     * @param method 方法名称
-     * @param args   方法参数
-     * @return
-     * @throws InvocationTargetException
-     * @throws IllegalArgumentException
-     * @throws IllegalAccessException
+     * invoke method
+     *
+     * @param bean   bean instance
+     * @param method method instance
+     * @param args   method arguments
+     * @return return method returned value
+     * @throws Exception throws Exception
      */
-    public static Object invokeMehod(Object bean, Method method, Object... args) throws Exception {
-        Class<?>[] types = method.getParameterTypes();
-        int argCount = args == null ? 0 : args.length;
+    public static Object invokeMethod(Object bean, Method method, Object... args) throws Exception {
+        Class<?>[] types    = method.getParameterTypes();
+        int        argCount = args == null ? 0 : args.length;
         // 参数个数对不上
         if (argCount != types.length) {
             throw new IllegalStateException(String.format("%s in %s", method.getName(), bean));
@@ -170,7 +193,7 @@ public class ReflectKit {
     public static Class<?> form(String typeName) {
         try {
             return Class.forName(typeName);
-        } catch (Exception e){
+        } catch (Exception e) {
             return null;
         }
     }
